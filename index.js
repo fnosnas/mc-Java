@@ -4,11 +4,13 @@ const axios = require("axios");
 const os = require('os');
 const fs = require("fs");
 const path = require("path");
+const net = require('net');
 const { promisify } = require('util');
 const exec = promisify(require('child_process').exec);
 
 // --- 基础配置 ---
-const PORT = process.env.SERVER_PORT || process.env.PORT || 25575;
+// Xserver 常用 25565 跑游戏，我们用 25575 跑 Web 界面
+const PORT = process.env.SERVER_PORT || process.env.PORT || 25575; 
 const FILE_PATH = process.env.FILE_PATH || './tmp';
 const SUB_PATH = process.env.SUB_PATH || 'sub';
 const UUID = process.env.UUID || '9afd1229-b893-40c1-84dd-51e7ce204913';
@@ -20,7 +22,7 @@ const NEZHA_KEY = process.env.NEZHA_KEY || 'RwHYwef7yYHT6hRTylfRzz';
 // --- Argo 变量 ---
 const ARGO_DOMAIN = process.env.ARGO_DOMAIN || 'xserver.afnos.eu.cc';
 const ARGO_AUTH = process.env.ARGO_AUTH || 'eyJhIjoiZjZhMGEwMjdiZmJiOGEwZjAwODUzOWY2NmQ1MmU2NWUiLCJ0IjoiNGU1M2M3YjEtM2QzNi00NzkyLTllNmUtYjJiOTUxMWU5OWE1IiwicyI6IllUSmpZMlk1TURBdFkyWTJPUzAwTTJFekxXRTRZV0V0TVRNMVlXVTRPR05rWVRWaSJ9';
-const ARGO_PORT = 8001; // 与你 CF 控制台一致
+const ARGO_PORT = 8001; 
 const CFIP = process.env.CFIP || 'cdns.doon.eu.org';
 const CFPORT = process.env.CFPORT || 443;
 const NAME = process.env.NAME || '';
@@ -35,7 +37,26 @@ const webPath = path.join(FILE_PATH, webName);
 const botPath = path.join(FILE_PATH, botName);
 const bootLogPath = path.join(FILE_PATH, 'boot.log');
 
-// 根目录确保显示 Hello world
+// --- 核心：防暂停/防睡眠逻辑 ---
+function startAntiSleep() {
+    // 1. 定时控制台心跳，干扰空闲检测
+    setInterval(() => {
+        console.log(`[Heartbeat] Active at ${new Date().toLocaleTimeString()}`);
+    }, 40000);
+
+    // 2. 模拟本地玩家连接（关键！针对 Xserver 暂停机制）
+    setInterval(() => {
+        const client = new net.Socket();
+        client.setTimeout(2000);
+        // 尝试连接游戏端口 25565
+        client.connect(25565, '127.0.0.1', () => {
+            client.destroy(); 
+        });
+        client.on('error', () => {}); // 忽略报错（游戏没开时会报错）
+    }, 50000);
+}
+
+// 根目录
 app.get("/", (req, res) => res.send("Hello world!"));
 
 async function getKomariUrl(arch) {
@@ -82,17 +103,11 @@ async function main() {
                     port: ARGO_PORT, listen: "127.0.0.1", protocol: "vless",
                     settings: { clients: [{ id: UUID }], decryption: "none" },
                     streamSettings: { network: "ws", wsSettings: { path: "/vless-argo" } }
-                },
-                {
-                    port: 3003, listen: "127.0.0.1", protocol: "vmess",
-                    settings: { clients: [{ id: UUID }] },
-                    streamSettings: { network: "ws", wsSettings: { path: "/vmess-argo" } }
                 }
             ],
             outbounds: [{ protocol: "freedom" }]
         };
         fs.writeFileSync(path.join(FILE_PATH, 'config.json'), JSON.stringify(config));
-        // 注意：这里去掉了 3000 端口的回落，让 Xray 只管节点，Argo 做分流
         exec(`nohup ${webPath} -c ${FILE_PATH}/config.json >/dev/null 2>&1 &`);
         console.log("[System] Xray binary executed.");
     }
@@ -117,11 +132,13 @@ async function main() {
         if (domain) {
             const nodeName = NAME || 'Komari-Node';
             const vlessSub = `vless://${UUID}@${CFIP}:${CFPORT}?encryption=none&security=tls&sni=${domain}&type=ws&host=${domain}&path=%2Fvless-argo#${nodeName}`;
-            const fullSub = `${vlessSub}`;
-            app.get(`/${SUB_PATH}`, (req, res) => res.send(Buffer.from(fullSub).toString('base64')));
+            app.get(`/${SUB_PATH}`, (req, res) => res.send(Buffer.from(vlessSub).toString('base64')));
             console.log(`[Success] Node ready on ${domain}`);
         }
     }, 15000);
+
+    // 启动防睡眠循环
+    startAntiSleep();
 }
 
 main().catch(e => console.error(e));
