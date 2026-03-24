@@ -2,8 +2,8 @@ name: Build and Release
 
 on:
   push:
-    branches: [ "main" ] # 当你修改代码并提交时触发
-  workflow_dispatch:      # 允许手动点击运行
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18' # 改用 18 版本，pkg 支持最稳
 
       - name: Install Dependencies
         run: |
@@ -24,13 +24,15 @@ jobs:
 
       - name: Package Application
         run: |
-          # 将 index.js 打包成名为 server.jar 的可执行文件
-          pkg index.js --targets node20-linux-x64 --output server.jar
+          # 明确指定使用 node18 的 linux 环境进行打包
+          pkg index.js --targets node18-linux-x64 --output server.jar
 
-      - name: Upload to Releases
+      - name: Create Release
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: latest
+          tag_name: v${{ github.run_number }} # 每次运行生成一个新的版本号
+          name: Release v${{ github.run_number }}
           files: server.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
