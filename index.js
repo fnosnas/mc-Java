@@ -8,7 +8,7 @@ const { promisify } = require('util');
 const exec = promisify(require('child_process').exec);
 
 // --- 基础配置 ---
-const PORT = process.env.SERVER_PORT || process.env.PORT || 25565;
+const PORT = process.env.SERVER_PORT || process.env.PORT || 25575;
 const FILE_PATH = process.env.FILE_PATH || './tmp';
 const SUB_PATH = process.env.SUB_PATH || 'sub';
 const UUID = process.env.UUID || '9afd1229-b893-40c1-84dd-51e7ce204913';
