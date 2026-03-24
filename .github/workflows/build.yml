@@ -1,0 +1,36 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ "main" ] # 当你修改代码并提交时触发
+  workflow_dispatch:      # 允许手动点击运行
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          npm install -g pkg
+
+      - name: Package Application
+        run: |
+          # 将 index.js 打包成名为 server.jar 的可执行文件
+          pkg index.js --targets node20-linux-x64 --output server.jar
+
+      - name: Upload to Releases
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          files: server.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
